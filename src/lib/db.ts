@@ -9,16 +9,21 @@ const isProd = process.env.NODE_ENV === 'production';
 
 export async function query(command: string, params: unknown[] = []) {
   if (isProd) {
-    // Vercel Postgres logic - ABSOLUTELY NO SQLITE HERE
     const { db } = await import('@vercel/postgres');
     
-    // Convert ? to $1, $2 for Postgres
+    // 1. Convert ? to $1, $2 for Postgres safely
     let pgCommand = command;
-    params.forEach((_, i) => {
-      pgCommand = pgCommand.replace('?', `$${i + 1}`);
-    });
+    let paramCount = 1;
+    while (pgCommand.includes('?')) {
+      pgCommand = pgCommand.replace('?', `$${paramCount++}`);
+    }
 
-    // Ensure tables exist in Postgres
+    // 2. Add RETURNING id to INSERT statements for Postgres
+    if (pgCommand.trim().toUpperCase().startsWith('INSERT') && !pgCommand.toUpperCase().includes('RETURNING')) {
+      pgCommand += ' RETURNING id';
+    }
+
+    // 3. Ensure tables exist (Split into separate queries for Postgres stability)
     if (!tablesInitialized) {
         try {
             await db.query(`
@@ -26,7 +31,9 @@ export async function query(command: string, params: unknown[] = []) {
                     id SERIAL PRIMARY KEY,
                     name TEXT NOT NULL UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
+                )
+            `);
+            await db.query(`
                 CREATE TABLE IF NOT EXISTS checklist_items (
                     id SERIAL PRIMARY KEY,
                     batch_id INTEGER NOT NULL,
@@ -39,17 +46,18 @@ export async function query(command: string, params: unknown[] = []) {
                     crm_ok BOOLEAN NOT NULL DEFAULT FALSE,
                     done BOOLEAN NOT NULL DEFAULT FALSE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
+                )
             `);
             tablesInitialized = true;
         } catch (e) {
-            console.error("Postgres table init failed:", e);
+            console.error("Cloud DB Init Error:", e);
         }
     }
 
+    // 4. Execute
     return await db.query(pgCommand, params);
   } else {
-    // Local SQLite logic - ONLY LOAD WHEN RUNNING LOCALLY
+    // Local SQLite logic
     const sqlite3 = (await import('sqlite3')).default;
     const { open } = await import('sqlite');
 
