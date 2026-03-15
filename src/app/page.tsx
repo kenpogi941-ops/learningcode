@@ -8,14 +8,16 @@ export default async function Home({
 }: {
   searchParams: { batch?: string };
 }) {
-  const batches = await getBatches();
+  const batches = await getBatches() || [];
   
   const selectedBatchIdStr = searchParams.batch;
-  const selectedBatchId = selectedBatchIdStr ? parseInt(selectedBatchIdStr) : (batches.length > 0 ? (batches as {id: number}[])[0].id : null);
+  const selectedBatchId = selectedBatchIdStr 
+    ? parseInt(selectedBatchIdStr) 
+    : (batches && batches.length > 0 ? (batches as {id: number}[])[0].id : null);
   
   let checklistItems: unknown[] = [];
   if (selectedBatchId) {
-    checklistItems = await getChecklistItems(selectedBatchId);
+    checklistItems = await getChecklistItems(selectedBatchId) || [];
   }
 
   return (

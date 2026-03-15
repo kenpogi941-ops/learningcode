@@ -11,33 +11,41 @@ export async function getDb(): Promise<Database> {
     ? path.join('/tmp', 'crm.db') 
     : path.join(process.cwd(), 'crm.db');
 
-  db = await open({
-    filename: dbPath,
-    driver: sqlite3.Database
-  });
+  console.log(`Connecting to database at: ${dbPath}`);
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS batches (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
+  try {
+    db = await open({
+      filename: dbPath,
+      driver: sqlite3.Database
+    });
 
-    CREATE TABLE IF NOT EXISTS checklist_items (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      batch_id INTEGER NOT NULL,
-      subitem TEXT NOT NULL,
-      label TEXT NOT NULL,
-      date TEXT NOT NULL,
-      time TEXT NOT NULL,
-      gap TEXT NOT NULL,
-      time_ok BOOLEAN NOT NULL DEFAULT 0,
-      crm_ok BOOLEAN NOT NULL DEFAULT 0,
-      done BOOLEAN NOT NULL DEFAULT 0,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (batch_id) REFERENCES batches (id) ON DELETE CASCADE
-    );
-  `);
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS batches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
 
-  return db;
+      CREATE TABLE IF NOT EXISTS checklist_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        batch_id INTEGER NOT NULL,
+        subitem TEXT NOT NULL,
+        label TEXT NOT NULL,
+        date TEXT NOT NULL,
+        time TEXT NOT NULL,
+        gap TEXT NOT NULL,
+        time_ok BOOLEAN NOT NULL DEFAULT 0,
+        crm_ok BOOLEAN NOT NULL DEFAULT 0,
+        done BOOLEAN NOT NULL DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (batch_id) REFERENCES batches (id) ON DELETE CASCADE
+      );
+    `);
+
+    console.log('Database initialized successfully');
+    return db;
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+    throw error;
+  }
 }

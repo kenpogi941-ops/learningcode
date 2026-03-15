@@ -20,8 +20,7 @@ export async function createBatch(name: string) {
     revalidatePath('/');
     return { success: true, id: result.lastID };
   } catch (error: unknown) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if ((error as any).code === 'SQLITE_CONSTRAINT') {
+    if ((error as { code?: string }).code === 'SQLITE_CONSTRAINT') {
       return { success: false, error: 'Batch name already exists' };
     }
     return { success: false, error: (error as Error).message };
@@ -109,8 +108,7 @@ export async function exportDatabaseBackup() {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function importDatabaseBackup(backupData: { batches: Record<string, any>[]; items: Record<string, any>[] }) {
+export async function importDatabaseBackup(backupData: { batches: Record<string, unknown>[]; items: Record<string, unknown>[] }) {
   try {
     const db = await getDb();
     await db.run('DELETE FROM checklist_items');
