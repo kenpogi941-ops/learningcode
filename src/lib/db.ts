@@ -2,7 +2,12 @@ import Database from 'better-sqlite3';
 import path from 'path';
 
 // Connect to SQLite database
-const db = new Database(path.join(process.cwd(), 'crm.db'));
+// In Vercel environment, we MUST use /tmp as it is the only writable directory
+const dbPath = process.env.NODE_ENV === 'production' 
+  ? path.join('/tmp', 'crm.db') 
+  : path.join(process.cwd(), 'crm.db');
+
+const db = new Database(dbPath);
 
 // Initialize tables
 db.exec(`
