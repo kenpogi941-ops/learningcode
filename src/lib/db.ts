@@ -1,6 +1,7 @@
 import sqlite3 from 'sqlite3';
 import { open, Database } from 'sqlite';
 import path from 'path';
+import fs from 'fs';
 
 let db: Database | null = null;
 
@@ -10,6 +11,11 @@ export async function getDb(): Promise<Database> {
   const dbPath = process.env.NODE_ENV === 'production' 
     ? path.join('/tmp', 'crm.db') 
     : path.join(process.cwd(), 'crm.db');
+
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
 
   console.log(`Connecting to database at: ${dbPath}`);
 
