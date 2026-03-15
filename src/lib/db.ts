@@ -3,6 +3,7 @@ import { open, Database as SQLiteDatabase } from 'sqlite';
 import path from 'path';
 
 let sqliteDb: SQLiteDatabase | null = null;
+let tablesInitialized = false;
 
 // Determine if we should use Postgres (Production) or SQLite (Local)
 const isProd = process.env.NODE_ENV === 'production';
@@ -10,9 +11,7 @@ const isProd = process.env.NODE_ENV === 'production';
 export async function query(command: string, params: unknown[] = []) {
   if (isProd) {
     // Vercel Postgres logic
-    // We convert SQL syntax slightly if needed, but for these simple queries it's mostly the same
-    // Note: sql tag is for tagged templates, but for dynamic queries we use the pool
-    const { db: pool } = await import('@vercel/postgres');
+    const { db } = await import('@vercel/postgres');
     
     // Convert ? to $1, $2 for Postgres
     let pgCommand = command;
@@ -20,9 +19,9 @@ export async function query(command: string, params: unknown[] = []) {
       pgCommand = pgCommand.replace('?', `$${i + 1}`);
     });
 
-    // Auto-create tables if they don't exist in Postgres
-    if (command.includes('INSERT') || command.includes('SELECT') || command.includes('DELETE')) {
-        await pool.query(`
+    // Ensure tables exist in Postgres
+    if (!tablesInitialized) {
+        await db.query(`
             CREATE TABLE IF NOT EXISTS batches (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
@@ -42,9 +41,10 @@ export async function query(command: string, params: unknown[] = []) {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         `);
+        tablesInitialized = true;
     }
 
-    return await pool.query(pgCommand, params);
+    return await db.query(pgCommand, params);
   } else {
     // Local SQLite logic
     if (!sqliteDb) {
