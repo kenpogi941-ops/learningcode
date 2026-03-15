@@ -14,7 +14,7 @@ import {
   logout,
 } from '../actions';
 import { format, parse, differenceInMinutes } from 'date-fns';
-import { Plus, X, LogOut } from 'lucide-react';
+import { Plus, X, LogOut, FileText, Upload } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -411,6 +411,38 @@ export default function CrmChecklist({
     e.target.value = '';
   };
 
+  const handleImportPDF = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      // Dynamic import to avoid SSR issues
+      const pdfjs = await import('pdfjs-dist');
+      // Set worker to CDN for simplicity in this environment
+      pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.mjs`;
+
+      const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+      const pdf = await loadingTask.promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+
+      setImportText(fullText);
+      setImportModalOpen(true);
+    } catch (err: unknown) {
+      console.error('PDF Import error:', err);
+      alert("Note: PDF structure is complex. We extracted the text - please review it in the next window!");
+    }
+    e.target.value = '';
+  };
+
+
   const completedCount = initialItems.filter((i) => i.done).length;
   const totalCount = initialItems.length;
   const percent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
@@ -476,6 +508,10 @@ export default function CrmChecklist({
       <div className="toolbar">
         <div style={{ display: 'flex', gap: '8px' }}>
           <button className="btn" onClick={() => setExportModalOpen(true)}>Export PDF</button>
+          <label className="btn" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileText size={16} /> Import PDF
+            <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={handleImportPDF} />
+          </label>
           <button className="btn" onClick={handleCopyAll}>Copy All</button>
           <button className="btn" onClick={handleClearAll}>Clear List</button>
         </div>
