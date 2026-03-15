@@ -11,9 +11,10 @@ import {
   clearAllChecklistItems,
   exportDatabaseBackup,
   importDatabaseBackup,
+  logout,
 } from '../actions';
 import { format, parse, differenceInMinutes } from 'date-fns';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, LogOut } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -416,7 +417,16 @@ export default function CrmChecklist({
 
   return (
     <div className="panel">
-      <div className="panel-header">Checklist</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="panel-header">Checklist</div>
+        <button 
+          onClick={() => { if(confirm('Logout?')) logout(); }} 
+          className="btn" 
+          style={{ padding: '8px 16px', fontSize: '12px', border: 'none', background: 'rgba(225, 29, 72, 0.05)', color: '#e11d48' }}
+        >
+          <LogOut size={16} /> Logout
+        </button>
+      </div>
 
       <div className="form-group">
         <label>Batch Name</label>

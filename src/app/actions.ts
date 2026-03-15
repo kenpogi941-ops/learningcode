@@ -2,6 +2,12 @@
 
 import db from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { cookies } from 'next/headers';
+import { SignJWT } from 'jose';
+
+const SECRET_KEY = process.env.JWT_SECRET || 'crm-checklist-secure-2026-khent';
+const AUTH_COOKIE = 'crm_auth_token';
+
 
 export async function getBatches() {
   const stmt = db.prepare('SELECT * FROM batches ORDER BY created_at DESC');
@@ -133,3 +139,29 @@ export async function importDatabaseBackup(backupData: { batches: Record<string,
     return { success: false, error: (error as Error).message };
   }
 }
+
+export async function login(password: string) {
+  if (password === 'khent2003') {
+    const secret = new TextEncoder().encode(SECRET_KEY);
+    const token = await new SignJWT({ role: 'admin' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setExpirationTime('24h')
+      .sign(secret);
+
+    cookies().set(AUTH_COOKIE, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24, // 24 hours
+    });
+
+    return { success: true };
+  }
+  return { success: false, error: 'Invalid password' };
+}
+
+export async function logout() {
+  cookies().delete(AUTH_COOKIE);
+  revalidatePath('/');
+}
+
