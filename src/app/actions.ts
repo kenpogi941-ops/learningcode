@@ -1,6 +1,6 @@
 'use server';
 
-import { getDb } from '@/lib/db';
+import { query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 import { cookies } from 'next/headers';
 import { SignJWT } from 'jose';
@@ -9,18 +9,17 @@ const SECRET_KEY = process.env.JWT_SECRET || 'crm-checklist-secure-2026-khent';
 const AUTH_COOKIE = 'crm_auth_token';
 
 export async function getBatches() {
-  const db = await getDb();
-  return db.all('SELECT * FROM batches ORDER BY created_at DESC');
+  const result = await query('SELECT * FROM batches ORDER BY created_at DESC');
+  return result.rows;
 }
 
 export async function createBatch(name: string) {
   try {
-    const db = await getDb();
-    const result = await db.run('INSERT INTO batches (name) VALUES (?)', name);
+    const result = await query('INSERT INTO batches (name) VALUES (?)', [name]);
     revalidatePath('/');
-    return { success: true, id: result.lastID };
+    return { success: true, id: (result as any).lastInsertRowid || (result as any).rows[0]?.id };
   } catch (error: unknown) {
-    if ((error as { code?: string }).code === 'SQLITE_CONSTRAINT') {
+    if ((error as any).code === 'SQLITE_CONSTRAINT' || (error as any).code === '23505') {
       return { success: false, error: 'Batch name already exists' };
     }
     return { success: false, error: (error as Error).message };
@@ -29,8 +28,7 @@ export async function createBatch(name: string) {
 
 export async function deleteBatch(id: number) {
   try {
-    const db = await getDb();
-    await db.run('DELETE FROM batches WHERE id = ?', id);
+    await query('DELETE FROM batches WHERE id = ?', [id]);
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -39,8 +37,8 @@ export async function deleteBatch(id: number) {
 }
 
 export async function getChecklistItems(batchId: number) {
-  const db = await getDb();
-  return db.all('SELECT * FROM checklist_items WHERE batch_id = ? ORDER BY id ASC', batchId);
+  const result = await query('SELECT * FROM checklist_items WHERE batch_id = ? ORDER BY id ASC', [batchId]);
+  return result.rows;
 }
 
 export async function createChecklistItem(data: {
@@ -52,11 +50,10 @@ export async function createChecklistItem(data: {
   gap: string;
 }) {
   try {
-    const db = await getDb();
-    await db.run(`
+    await query(`
       INSERT INTO checklist_items (batch_id, subitem, label, date, time, gap, time_ok, crm_ok, done)
-      VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0)
-    `, data.batch_id, data.subitem, data.label, data.date, data.time, data.gap);
+      VALUES (?, ?, ?, ?, ?, ?, FALSE, FALSE, FALSE)
+    `, [data.batch_id, data.subitem, data.label, data.date, data.time, data.gap]);
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -66,8 +63,10 @@ export async function createChecklistItem(data: {
 
 export async function toggleItemState(id: number, field: 'done' | 'time_ok' | 'crm_ok', currentState: boolean) {
   try {
-    const db = await getDb();
-    await db.run(`UPDATE checklist_items SET ${field} = ? WHERE id = ?`, currentState ? 0 : 1, id);
+    // Note: Postgres uses true/false for boolean, SQLite uses 1/0. 
+    // Our query helper handles the conversion if we pass it carefully.
+    const newVal = currentState ? false : true;
+    await query(`UPDATE checklist_items SET ${field} = ? WHERE id = ?`, [newVal, id]);
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -77,8 +76,7 @@ export async function toggleItemState(id: number, field: 'done' | 'time_ok' | 'c
 
 export async function deleteChecklistItem(id: number) {
   try {
-    const db = await getDb();
-    await db.run('DELETE FROM checklist_items WHERE id = ?', id);
+    await query('DELETE FROM checklist_items WHERE id = ?', [id]);
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -88,8 +86,7 @@ export async function deleteChecklistItem(id: number) {
 
 export async function clearAllChecklistItems(batchId: number) {
   try {
-    const db = await getDb();
-    await db.run('DELETE FROM checklist_items WHERE batch_id = ?', batchId);
+    await query('DELETE FROM checklist_items WHERE batch_id = ?', [batchId]);
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -99,31 +96,29 @@ export async function clearAllChecklistItems(batchId: number) {
 
 export async function exportDatabaseBackup() {
   try {
-    const db = await getDb();
-    const batches = await db.all('SELECT * FROM batches');
-    const items = await db.all('SELECT * FROM checklist_items');
-    return { success: true, data: { batches, items } };
+    const batchesResult = await query('SELECT * FROM batches');
+    const itemsResult = await query('SELECT * FROM checklist_items');
+    return { success: true, data: { batches: batchesResult.rows, items: itemsResult.rows } };
   } catch (error: unknown) {
     return { success: false, error: (error as Error).message };
   }
 }
 
-export async function importDatabaseBackup(backupData: { batches: Record<string, unknown>[]; items: Record<string, unknown>[] }) {
+export async function importDatabaseBackup(backupData: { batches: Record<string, any>[]; items: Record<string, any>[] }) {
   try {
-    const db = await getDb();
-    await db.run('DELETE FROM checklist_items');
-    await db.run('DELETE FROM batches');
+    await query('DELETE FROM checklist_items');
+    await query('DELETE FROM batches');
 
     for (const batch of backupData.batches) {
-      await db.run('INSERT INTO batches (id, name, created_at) VALUES (?, ?, ?)', batch.id, batch.name, batch.created_at);
+      await query('INSERT INTO batches (id, name, created_at) VALUES (?, ?, ?)', [batch.id, batch.name, batch.created_at]);
     }
 
     for (const item of backupData.items) {
-      await db.run(`
+      await query(`
         INSERT INTO checklist_items (id, batch_id, subitem, label, date, time, gap, time_ok, crm_ok, done, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, item.id, item.batch_id, item.subitem, item.label, item.date, item.time, item.gap,
-         item.time_ok, item.crm_ok, item.done, item.created_at);
+      `, [item.id, item.batch_id, item.subitem, item.label, item.date, item.time, item.gap,
+         item.time_ok, item.crm_ok, item.done, item.created_at]);
     }
 
     revalidatePath('/');
