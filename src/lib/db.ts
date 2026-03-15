@@ -1,20 +1,18 @@
 import sqlite3 from 'sqlite3';
 import { open, Database as SQLiteDatabase } from 'sqlite';
 import path from 'path';
-import fs from 'fs';
-import { sql } from '@vercel/postgres';
 
 let sqliteDb: SQLiteDatabase | null = null;
 
 // Determine if we should use Postgres (Production) or SQLite (Local)
 const isProd = process.env.NODE_ENV === 'production';
 
-export async function query(command: string, params: any[] = []) {
+export async function query(command: string, params: unknown[] = []) {
   if (isProd) {
     // Vercel Postgres logic
     // We convert SQL syntax slightly if needed, but for these simple queries it's mostly the same
     // Note: sql tag is for tagged templates, but for dynamic queries we use the pool
-    const { pool } = await import('@vercel/postgres');
+    const { db: pool } = await import('@vercel/postgres');
     
     // Convert ? to $1, $2 for Postgres
     let pgCommand = command;

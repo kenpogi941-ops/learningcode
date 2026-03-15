@@ -17,12 +17,14 @@ export async function createBatch(name: string) {
   try {
     const result = await query('INSERT INTO batches (name) VALUES (?)', [name]);
     revalidatePath('/');
-    return { success: true, id: (result as any).lastInsertRowid || (result as any).rows[0]?.id };
+    const res = result as { lastInsertRowid?: number; rows: { id: number }[] };
+    return { success: true, id: res.lastInsertRowid || res.rows[0]?.id };
   } catch (error: unknown) {
-    if ((error as any).code === 'SQLITE_CONSTRAINT' || (error as any).code === '23505') {
+    const err = error as { code?: string; message: string };
+    if (err.code === 'SQLITE_CONSTRAINT' || err.code === '23505') {
       return { success: false, error: 'Batch name already exists' };
     }
-    return { success: false, error: (error as Error).message };
+    return { success: false, error: err.message };
   }
 }
 
@@ -104,7 +106,7 @@ export async function exportDatabaseBackup() {
   }
 }
 
-export async function importDatabaseBackup(backupData: { batches: Record<string, any>[]; items: Record<string, any>[] }) {
+export async function importDatabaseBackup(backupData: { batches: Record<string, unknown>[]; items: Record<string, unknown>[] }) {
   try {
     await query('DELETE FROM checklist_items');
     await query('DELETE FROM batches');
