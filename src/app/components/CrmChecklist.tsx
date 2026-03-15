@@ -14,7 +14,7 @@ import {
   logout,
 } from '../actions';
 import { format, parse, differenceInMinutes } from 'date-fns';
-import { Plus, X, LogOut, FileText, Upload } from 'lucide-react';
+import { Plus, X, LogOut, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -429,7 +429,8 @@ export default function CrmChecklist({
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pageText = textContent.items.map((item: any) => item.str || '').join(' ');
         fullText += pageText + '\n';
       }
 
